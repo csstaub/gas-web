@@ -1,0 +1,16 @@
+sudo: required
+services:
+- docker
+language: go
+go: 1.6
+script:
+- go build hello.go
+after_success:
+- docker build -t $APP_NAME .
+- docker save -o $APP_NAME.tar $APP_NAME
+- export URL=$(curl -s -u ":$DOCKER_UPLOAD_TOKEN" -X POST https://www.skyliner.io/images/docker/$TRAVIS_COMMIT)
+- curl --upload-file $APP_NAME.tar $URL
+env:
+  global:
+  - APP_NAME=hello-go
+  - secure: Y522urD600r8DO5V5gBwkl/9cTlIvbpc75XdX+QNgm9bNisqSu6o8/4G35JDrlIaxjQ0tZnbKDE9fC16fUU9+KFL0CUvJuBSybBJZzsSV5t5U8e+xuZqclpswJ/0rCKWxPFbRre9xxXCngnxTpgs7DSMiCtBZ7vmX/+3y3TwgUPicUwbjctLIjUDf03ZVOh6xTS5e/Of1yyz6eo1eVJThg1KTEZwafD6MFZTqd4FLOXOLuxd03jKK+R3MRA8rkTSls6DZ7bsfwMLnJUCEZ9hP/Hfj766ED39uIzOBvxpkjgSzMH4DIrSNE1qtqeJwo4yOS+Sm9w2Mcg7l7pDqHrHWZAswEKcfJeyoHAdFbwG6nLkjZvubM9Y0BVVHClKxymPgP48D9MGd32Vs81DCvfm4g5TarqUJPeclJg85QW6bvzMB6G7sOCQcCnSWq3DAxIJiAgVZ2F+q+hUJyBiOmAjb+h3R/QvjuA4zhAmOk/CfvOgW8BZLVXfXZKLiKeSXreqPUOu4hMX5/FPLfWDu/snOENwaPhk0fk5AUtfnBk+pvPGh2KYukkVVs2NySfSo0U2vSid5JJ/nEAaL5aN0rSYNsNQNK5pQplJETlir3t/H4GRvHs9hrz+hAd8GCkKCW2ftV792RdVMxG5E9zEqXN+01bldaQdHTWp9wTh3Z4MX6k=
