@@ -106,6 +106,14 @@
 			"notests": true
 		},
 		{
+			"importpath": "github.com/go-errors/errors",
+			"repository": "https://github.com/go-errors/errors",
+			"vcs": "git",
+			"revision": "a41850380601eeb43f4350f7d17c6bbd8944aaf8",
+			"branch": "master",
+			"notests": true
+		},
+		{
 			"importpath": "github.com/go-martini/martini",
 			"repository": "https://github.com/go-martini/martini",
 			"vcs": "git",
