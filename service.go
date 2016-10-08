@@ -52,6 +52,7 @@ func main() {
 	}
 
 	r := mux.NewRouter()
+	r.HandleFunc("/_status", statusHandler)
 	r.HandleFunc("/queue/github.com/{user:[a-zA-Z-_]+}/{repo:[a-zA-Z-_]+}", w.queueRequest)
 	r.HandleFunc("/results/github.com/{user:[a-zA-Z-_]+}/{repo:[a-zA-Z-_]+}", serveResults(w.db))
 
@@ -63,6 +64,10 @@ func main() {
 	if err := http.ListenAndServe(addr, cors.Default().Handler(r)); err != nil {
 		logger.Fatal(err)
 	}
+}
+
+func statusHandler(resp http.ResponseWriter, req *http.Request) {
+	resp.WriteHeader(http.StatusOK)
 }
 
 func serveResults(db database) func(resp http.ResponseWriter, req *http.Request) {
