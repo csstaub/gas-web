@@ -61,18 +61,24 @@ func (w *worker) process(nodeID, repo string) (*gas.Analyzer, error) {
 		logError(fmt.Sprintf("panic processing %s", repo), recover())
 	}()
 
+	path := fmt.Sprintf("github.com/%s", repo)
+	t, _, err := w.db.fetchResults(path)
+	if err == nil && t.Add(5*time.Minute).After(time.Now()) {
+		logger.Printf("node %s skipping %s, results less than 5 minutes old", nodeID, repo)
+		return nil, nil
+	}
+
 	// Acquire lock
 	locked := time.Now()
-	path := fmt.Sprintf("github.com/%s", repo)
-	ok, err := w.db.lockPath(nodeID, path, 5*time.Minute)
+	lock, err := w.db.lockPath(nodeID, path, 5*time.Minute)
 	if err != nil {
 		return nil, errors.WrapPrefix(err, "error acquiring lock", 0)
 	}
-	if !ok {
+	if lock == nil {
 		logger.Printf("node %s skipping %s, already locked", nodeID, repo)
 		return nil, nil
 	}
-	defer w.db.unlockPath(nodeID, path)
+	defer lock.unlock()
 
 	analyzer := buildAnalyzer()
 	url := fmt.Sprintf("http://api.github.com/repos/%s/tarball", repo)
@@ -101,12 +107,9 @@ func (w *worker) process(nodeID, repo string) (*gas.Analyzer, error) {
 	for i := 0; i < archiveFileLimit; i++ {
 		// Refresh lock every minute
 		if time.Now().After(locked.Add(1 * time.Minute)) {
-			ok, err := w.db.lockPath(nodeID, path, 5*time.Minute)
+			err = lock.refresh()
 			if err != nil {
-				return nil, errors.WrapPrefix(err, "error refreshing lock", 0)
-			}
-			if !ok {
-				return nil, errors.New("lost lock, possibly due to timeout? aborting")
+				return nil, errors.WrapPrefix(err, "lost lock, aborting", 0)
 			}
 		}
 

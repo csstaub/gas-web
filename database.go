@@ -11,10 +11,14 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 )
 
+type lock interface {
+	unlock() error
+	refresh() error
+}
+
 type database interface {
 	// Lock operations
-	lockPath(node, path string, lifetime time.Duration) (bool, error)
-	unlockPath(node, path string) error
+	lockPath(node, path string, lifetime time.Duration) (lock, error)
 	isLocked(path string) (bool, error)
 
 	// Results storage
@@ -24,6 +28,14 @@ type database interface {
 
 type sqlDatabase struct {
 	*sql.DB
+}
+
+type sqlLock struct {
+	db       *sqlDatabase
+	lifetime time.Duration
+	node     string
+	path     string
+	hash     []byte
 }
 
 func newSQLDatabase() (database, error) {
@@ -40,10 +52,10 @@ func newSQLDatabase() (database, error) {
 	return &sqlDatabase{db}, nil
 }
 
-func (db *sqlDatabase) lockPath(node, path string, lifetime time.Duration) (bool, error) {
+func (db *sqlDatabase) lockPath(node, path string, lifetime time.Duration) (lock, error) {
 	tx, err := db.Begin()
 	if err != nil {
-		return false, errors.New(err)
+		return nil, errors.New(err)
 	}
 
 	logger.Printf("node %s requesting lock %s for %s", node, path, lifetime.String())
@@ -56,7 +68,7 @@ func (db *sqlDatabase) lockPath(node, path string, lifetime time.Duration) (bool
 	var lockLifetime int64
 	err = row.Scan(&lockHolder, &lockTimestamp, &lockLifetime)
 	if err != nil && err != sql.ErrNoRows {
-		return false, errors.WrapPrefix(err, "error talking to database", 0)
+		return nil, errors.WrapPrefix(err, "error talking to database", 0)
 	}
 
 	if err != nil {
@@ -67,7 +79,7 @@ func (db *sqlDatabase) lockPath(node, path string, lifetime time.Duration) (bool
 		if err != nil {
 			logError(fmt.Sprintf("node %s error on rollback", node), tx.Rollback())
 			logger.Printf("node %s unable to acquire lock %s (DB error)", node, path)
-			return false, errors.WrapPrefix(err, "unable to acquire lock (insert failed)", 0)
+			return nil, errors.WrapPrefix(err, "unable to acquire lock (insert failed)", 0)
 		}
 	} else {
 		expiry := time.Unix(lockTimestamp, 0).Add(time.Duration(lockLifetime) * time.Second)
@@ -79,21 +91,21 @@ func (db *sqlDatabase) lockPath(node, path string, lifetime time.Duration) (bool
 			if err != nil {
 				logError(fmt.Sprintf("node %s error on rollback", node), tx.Rollback())
 				logger.Printf("node %s unable to acquire lock %s (DB error)", node, path)
-				return false, errors.WrapPrefix(err, "unable to acquire lock (update failed)", 0)
+				return nil, errors.WrapPrefix(err, "unable to acquire lock (update failed)", 0)
 			}
 		} else {
 			logger.Printf("node %s unable to acquire lock %s (already locked)", node, path)
-			return false, nil
+			return nil, nil
 		}
 	}
 
 	err = tx.Commit()
 	if err != nil {
 		logger.Printf("node %s unable to acquire lock %s (commit failed)", node, path)
-		return false, nil
+		return nil, nil
 	}
 	logger.Printf("node %s acquired lock %s for %s", node, path, lifetime.String())
-	return true, nil
+	return &sqlLock{db, lifetime, node, path, hash[:]}, nil
 }
 
 func (db *sqlDatabase) isLocked(path string) (bool, error) {
@@ -119,11 +131,33 @@ func (db *sqlDatabase) isLocked(path string) (bool, error) {
 	return true, nil
 }
 
-func (db *sqlDatabase) unlockPath(node, path string) error {
-	logger.Printf("node %s dropping lock %s", node, path)
+func (sl *sqlLock) refresh() error {
+	logger.Printf("node %s refreshing lock %s for %s", sl.node, sl.path, sl.lifetime.String())
 
-	hash := sha256.Sum256([]byte(path))
-	_, err := db.Exec("DELETE FROM locks WHERE hash = ? AND holder = ?", hash[:], node)
+	r, err := sl.db.Exec(
+		"UPDATE locks SET timestamp = ?, lifetime = ? WHERE hash = ?, holder = ?",
+		time.Now().Unix(), sl.lifetime/time.Second, sl.hash, sl.node)
+	if err != nil {
+		logger.Printf("node %s unable to refresh lock %s (DB error)", sl.node, sl.path)
+		return errors.WrapPrefix(err, "unable to refresh lock (update failed)", 0)
+	}
+
+	n, err := r.RowsAffected()
+	if err != nil {
+		logger.Printf("node %s unable to refresh lock %s (result error)", sl.node, sl.path)
+		return errors.WrapPrefix(err, "unable to refresh (update failed)", 0)
+	}
+	if n != 1 {
+		logger.Printf("node %s unable to refresh lock %s (lost lock)", sl.node, sl.path)
+		return errors.New("unable to refresh lock: lost lock?")
+	}
+	return nil
+}
+
+func (sl *sqlLock) unlock() error {
+	logger.Printf("node %s dropping lock %s", sl.node, sl.path)
+
+	_, err := sl.db.Exec("DELETE FROM locks WHERE hash = ? AND holder = ?", sl.hash, sl.node)
 	if err != nil {
 		return errors.WrapPrefix(err, "unable to drop lock", 0)
 	}
