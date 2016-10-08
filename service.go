@@ -6,6 +6,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"runtime"
+	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/rs/cors"
@@ -38,8 +40,14 @@ func getAddr() string {
 func main() {
 	addr := getAddr()
 
+	db, err := newSQLDatabase()
+	if err != nil {
+		logError("unable to connect to database", err)
+		os.Exit(1)
+	}
+
 	w := &worker{
-		db:   newMemoryDatabase(),
+		db:   db,
 		reqs: make(chan string, 10),
 	}
 
@@ -47,7 +55,9 @@ func main() {
 	r.HandleFunc("/queue/github.com/{user:[a-zA-Z-_]+}/{repo:[a-zA-Z-_]+}", w.queueRequest)
 	r.HandleFunc("/results/github.com/{user:[a-zA-Z-_]+}/{repo:[a-zA-Z-_]+}", serveResults(w.db))
 
-	go w.run()
+	for i := 0; i < runtime.NumCPU(); i++ {
+		go w.run()
+	}
 
 	logger.Printf("listening on %s", addr)
 	if err := http.ListenAndServe(addr, cors.Default().Handler(r)); err != nil {
@@ -62,26 +72,35 @@ func serveResults(db database) func(resp http.ResponseWriter, req *http.Request)
 		repo := vars["repo"]
 
 		path := fmt.Sprintf("github.com/%s/%s", user, repo)
-		r, ok := db.load(path)
-		if !ok {
-			resp.WriteHeader(http.StatusNotFound)
-			return
-		}
-
-		if r.Results == "" {
-			resp.WriteHeader(http.StatusNotFound)
+		t, r, err := db.fetchResults(path)
+		if err != nil {
+			locked, err := db.isLocked(path)
+			if err != nil {
+				resp.WriteHeader(http.StatusInternalServerError)
+			} else if !locked {
+				resp.WriteHeader(http.StatusNotFound)
+			} else {
+				raw, _ := json.Marshal(map[string]interface{}{
+					"time":       time.Now(),
+					"processing": true,
+				})
+				resp.Write(raw)
+			}
 			return
 		}
 
 		res := map[string]interface{}{}
-		err := json.Unmarshal([]byte(r.Results), &res)
+		err = json.Unmarshal([]byte(r), &res)
 		if err != nil {
 			logger.Printf("invalid JSON document at path %s", path)
 			resp.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
-		raw, _ := json.Marshal(map[string]interface{}{"results": res})
+		raw, _ := json.Marshal(map[string]interface{}{
+			"time":    t,
+			"results": res,
+		})
 		resp.Write(raw)
 	}
 }

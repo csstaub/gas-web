@@ -3,13 +3,13 @@ FROM alpine:3.4
 
 # Set up the environment for building the application.
 ENV GOROOT=/usr/lib/go \
-    GOPATH=/opt/gas-web \
+    GOPATH=/go \
     PATH=$PATH:$GOROOT/bin:$GOPATH
 
 # Establish a working directory and copy our application
 # files into it.
-WORKDIR /opt/gas-web
-ADD . /opt/gas-web
+WORKDIR /go
+ADD . /go/src/github.com/csstaub/gas-web
 
 # Build your application.
 RUN \
@@ -20,12 +20,12 @@ RUN \
 	# Install go for building.
 	apk add -U go && \
 	# Compile our app
-	go build hello.go && \
+	go install github.com/csstaub/gas-web && \
 	# Delete go after build.
 	apk del go
 
 # Run the application.
-ENTRYPOINT ["/opt/gas-web/hello"]
+ENTRYPOINT ["/go/bin/gas-web"]
 
 # You can test this Docker image locally by running:
 #

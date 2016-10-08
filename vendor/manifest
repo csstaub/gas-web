@@ -10,78 +10,6 @@
 			"notests": true
 		},
 		{
-			"importpath": "github.com/aws/aws-sdk-go/aws",
-			"repository": "https://github.com/aws/aws-sdk-go",
-			"vcs": "git",
-			"revision": "5717392a1fc0a2cc1e35b28eef3154ce318b18f4",
-			"branch": "master",
-			"path": "/aws",
-			"notests": true
-		},
-		{
-			"importpath": "github.com/aws/aws-sdk-go/private/endpoints",
-			"repository": "https://github.com/aws/aws-sdk-go",
-			"vcs": "git",
-			"revision": "5717392a1fc0a2cc1e35b28eef3154ce318b18f4",
-			"branch": "master",
-			"path": "private/endpoints",
-			"notests": true
-		},
-		{
-			"importpath": "github.com/aws/aws-sdk-go/private/protocol",
-			"repository": "https://github.com/aws/aws-sdk-go",
-			"vcs": "git",
-			"revision": "5717392a1fc0a2cc1e35b28eef3154ce318b18f4",
-			"branch": "master",
-			"path": "private/protocol",
-			"notests": true
-		},
-		{
-			"importpath": "github.com/aws/aws-sdk-go/private/waiter",
-			"repository": "https://github.com/aws/aws-sdk-go",
-			"vcs": "git",
-			"revision": "5717392a1fc0a2cc1e35b28eef3154ce318b18f4",
-			"branch": "master",
-			"path": "private/waiter",
-			"notests": true
-		},
-		{
-			"importpath": "github.com/aws/aws-sdk-go/service/dynamodb",
-			"repository": "https://github.com/aws/aws-sdk-go",
-			"vcs": "git",
-			"revision": "5717392a1fc0a2cc1e35b28eef3154ce318b18f4",
-			"branch": "master",
-			"path": "service/dynamodb",
-			"notests": true
-		},
-		{
-			"importpath": "github.com/aws/aws-sdk-go/service/sts",
-			"repository": "https://github.com/aws/aws-sdk-go",
-			"vcs": "git",
-			"revision": "5717392a1fc0a2cc1e35b28eef3154ce318b18f4",
-			"branch": "master",
-			"path": "service/sts",
-			"notests": true
-		},
-		{
-			"importpath": "github.com/aws/aws-sdk-go/vendor/github.com/go-ini/ini",
-			"repository": "https://github.com/aws/aws-sdk-go",
-			"vcs": "git",
-			"revision": "5717392a1fc0a2cc1e35b28eef3154ce318b18f4",
-			"branch": "master",
-			"path": "vendor/github.com/go-ini/ini",
-			"notests": true
-		},
-		{
-			"importpath": "github.com/aws/aws-sdk-go/vendor/github.com/jmespath/go-jmespath",
-			"repository": "https://github.com/aws/aws-sdk-go",
-			"vcs": "git",
-			"revision": "5717392a1fc0a2cc1e35b28eef3154ce318b18f4",
-			"branch": "master",
-			"path": "vendor/github.com/jmespath/go-jmespath",
-			"notests": true
-		},
-		{
 			"importpath": "github.com/cenkalti/backoff",
 			"repository": "https://github.com/cenkalti/backoff",
 			"vcs": "git",
@@ -122,6 +50,14 @@
 			"notests": true
 		},
 		{
+			"importpath": "github.com/go-sql-driver/mysql",
+			"repository": "https://github.com/go-sql-driver/mysql",
+			"vcs": "git",
+			"revision": "0b58b37b664c21f3010e836f1b931e1d0b0b0685",
+			"branch": "master",
+			"notests": true
+		},
+		{
 			"importpath": "github.com/goji/param",
 			"repository": "https://github.com/goji/param",
 			"vcs": "git",
@@ -142,14 +78,6 @@
 			"repository": "https://github.com/gorilla/mux",
 			"vcs": "git",
 			"revision": "757bef944d0f21880861c2dd9c871ca543023cba",
-			"branch": "master",
-			"notests": true
-		},
-		{
-			"importpath": "github.com/guregu/dynamo",
-			"repository": "https://github.com/guregu/dynamo",
-			"vcs": "git",
-			"revision": "bc4b7d486595bb111de3cea80827c4c39fd0edb1",
 			"branch": "master",
 			"notests": true
 		},
@@ -190,6 +118,14 @@
 			"repository": "https://github.com/rs/xhandler",
 			"vcs": "git",
 			"revision": "ed27b6fd65218132ee50cd95f38474a3d8a2cd12",
+			"branch": "master",
+			"notests": true
+		},
+		{
+			"importpath": "github.com/satori/go.uuid",
+			"repository": "https://github.com/satori/go.uuid",
+			"vcs": "git",
+			"revision": "b061729afc07e77a8aa4fad0a2fd840958f1942a",
 			"branch": "master",
 			"notests": true
 		},
