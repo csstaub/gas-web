@@ -18,7 +18,7 @@ RUN \
 	# Ensure we have ca-certs installed.
 	apk add --no-cache ca-certificates && \
 	# Install go for building.
-	apk add -U go && \
+	apk add -U go gcc g++ make && \
 	# Compile our app
 	go install github.com/csstaub/gas-web && \
 	# Delete go after build.

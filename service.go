@@ -1,13 +1,17 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"path"
 	"runtime"
 	"time"
+
+	"bitbucket.org/liamstask/goose/lib/goose"
 
 	"github.com/gorilla/mux"
 	"github.com/rs/cors"
@@ -45,6 +49,7 @@ func main() {
 		logError("unable to connect to database", err)
 		os.Exit(1)
 	}
+	migrate(db.(*sqlDatabase).DB)
 
 	w := &worker{
 		db:   db,
@@ -64,6 +69,33 @@ func main() {
 	if err := http.ListenAndServe(addr, cors.Default().Handler(r)); err != nil {
 		logger.Fatal(err)
 	}
+}
+
+func migrate(db *sql.DB) {
+	base := os.Getenv("GOPATH")
+	migrations := path.Join(base, "src/github.com/csstaub/gas-web/db/migrations")
+
+	gooseConf := goose.DBConf{
+		MigrationsDir: migrations,
+		Env:           "gas-web",
+		Driver: goose.DBDriver{
+			Name:    "mysql",
+			Import:  "github.com/go-sql-driver/mysql",
+			Dialect: &goose.MySqlDialect{},
+		},
+	}
+
+	desiredVersion, err := goose.GetMostRecentDBVersion(migrations)
+	if err != nil {
+		logger.Fatalf("unable to run migrations: %s", err)
+	}
+
+	err = goose.RunMigrationsOnDb(&gooseConf, migrations, desiredVersion, db)
+	if err != nil {
+		logger.Fatalf("unable to run migrations: %s", err)
+	}
+
+	logger.Printf("ran migrations up to version %d", desiredVersion)
 }
 
 func statusHandler(resp http.ResponseWriter, req *http.Request) {
