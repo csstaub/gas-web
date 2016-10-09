@@ -41,6 +41,32 @@ func getAddr() string {
 	return fmt.Sprintf(":%s", port)
 }
 
+type headerWrapper struct {
+	handler func(resp http.ResponseWriter, req *http.Request)
+	headers map[string]string
+}
+
+func (h headerWrapper) Handler(handler http.Handler) http.Handler {
+	return headerWrapper{
+		handler: handler.ServeHTTP,
+		headers: h.headers,
+	}
+}
+
+func (h headerWrapper) HandleFunc(handler func(resp http.ResponseWriter, req *http.Request)) func(resp http.ResponseWriter, req *http.Request) {
+	return headerWrapper{
+		handler: handler,
+		headers: h.headers,
+	}.ServeHTTP
+}
+
+func (h headerWrapper) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
+	for k, v := range h.headers {
+		resp.Header().Set(k, v)
+	}
+	h.handler(resp, req)
+}
+
 func main() {
 	addr := getAddr()
 
@@ -56,13 +82,19 @@ func main() {
 		reqs: make(chan string, 10),
 	}
 
-	r := mux.NewRouter()
-	r.HandleFunc("/queue/github.com/{user:[a-zA-Z-0-9-_]+}/{repo:[a-zA-Z0-9-_]+}", w.queueRequest).Methods("POST")
-	r.HandleFunc("/results/github.com/{user:[a-zA-Z0-9-_]+}/{repo:[a-zA-Z0-9-_]+}", serveResults(w.db)).Methods("GET")
+	h := &headerWrapper{
+		headers: map[string]string{
+			"Content-Security-Policy": "default-src 'self' cdnjs.cloudflare.com;",
+			"X-Content-Type-Options":  "nosniff",
+			"X-Frame-Options":         "deny",
+			"X-XSS-Protection":        "1; mode=block",
+		}}
 
-	base := os.Getenv("GOPATH")
-	assets := path.Join(base, "src/github.com/csstaub/gas-web/assets")
-	r.PathPrefix("/").Handler(http.FileServer(http.Dir(assets)))
+	r := mux.NewRouter()
+	r.HandleFunc("/queue/github.com/{user:[a-zA-Z-0-9-_]+}/{repo:[a-zA-Z0-9-_]+}", h.HandleFunc(w.queueRequest)).Methods("POST")
+	r.HandleFunc("/results/github.com/{user:[a-zA-Z0-9-_]+}/{repo:[a-zA-Z0-9-_]+}", h.HandleFunc(serveResults(w.db))).Methods("GET")
+
+	r.PathPrefix("/").Handler(h.Handler(http.FileServer(http.Dir("assets/dist"))))
 
 	for i := 0; i < runtime.NumCPU(); i++ {
 		go w.run()
@@ -75,8 +107,7 @@ func main() {
 }
 
 func migrate(db *sql.DB) {
-	base := os.Getenv("GOPATH")
-	migrations := path.Join(base, "src/github.com/csstaub/gas-web/db/migrations")
+	migrations := path.Join("db/migrations")
 
 	gooseConf := goose.DBConf{
 		MigrationsDir: migrations,

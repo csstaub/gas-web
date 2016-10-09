@@ -1,5 +1,5 @@
-var classForTag = function(lvl) {
-}
+require("./index.html");
+require("./main.css");
 
 var IssueTag = React.createClass({
   render: function() {

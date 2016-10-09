@@ -8,21 +8,24 @@ ENV GOROOT=/usr/lib/go \
 
 # Establish a working directory and copy our application
 # files into it.
-WORKDIR /go
-ADD . /go/src/github.com/csstaub/gas-web
+WORKDIR /go/src/github.com/csstaub/gas-web
+ADD . /go/src/github.com/csstaub/gas-web/
 
-# Build your application.
+# Some basics
 RUN \
 	# Upgrade old packages.
 	apk --update upgrade && \
 	# Ensure we have ca-certs installed.
 	apk add --no-cache ca-certificates && \
 	# Install go for building.
-	apk add -U go gcc g++ make && \
+	apk add -U go gcc g++ make nodejs && \
 	# Compile our app
-	go install github.com/csstaub/gas-web && \
-	# Delete go after build.
-	apk del go
+	go build -o /go/bin/gas-web . && \
+  cd assets && npm i && npm run-script build && cd .. && \
+  # Delete deps, toolchain to save space
+  rm -rf /root/.npm /tmp/* vendor assets/node_modules $GOPATH/pkg && \
+	apk del go nodejs gcc g++ make && \
+  rm -rf /var/cache/apk/*
 
 # Run the application.
 ENTRYPOINT ["/go/bin/gas-web"]
