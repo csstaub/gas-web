@@ -22,8 +22,8 @@ type database interface {
 	isLocked(path string) (bool, error)
 
 	// Results storage
-	storeResults(path, results string) error
-	fetchResults(path string) (time.Time, string, error)
+	storeResults(path, etag, results string) error
+	fetchResults(path string) (time.Time, string, string, error)
 }
 
 type sqlDatabase struct {
@@ -164,28 +164,29 @@ func (sl *sqlLock) unlock() error {
 	return nil
 }
 
-func (db *sqlDatabase) storeResults(path, results string) error {
+func (db *sqlDatabase) storeResults(path, etag, results string) error {
 	hash := sha256.Sum256([]byte(path))
 	_, err := db.Exec(
-		`INSERT INTO results (hash, timestamp, results) VALUES (?, ?, ?) 
-		 ON DUPLICATE KEY UPDATE timestamp = ?, results = ?`,
-		hash[:], time.Now().Unix(), results, time.Now().Unix(), results)
+		`INSERT INTO results (hash, timestamp, etag, results) VALUES (?, ?, ?, ?) 
+		 ON DUPLICATE KEY UPDATE timestamp = ?, etag = ?, results = ?`,
+		hash[:], time.Now().Unix(), etag, results, time.Now().Unix(), etag, results)
 	if err != nil {
 		return errors.New(err)
 	}
 	return nil
 }
 
-func (db *sqlDatabase) fetchResults(path string) (time.Time, string, error) {
+func (db *sqlDatabase) fetchResults(path string) (time.Time, string, string, error) {
 	hash := sha256.Sum256([]byte(path))
-	r := db.QueryRow("SELECT timestamp, results FROM results WHERE hash = ?", hash[:])
+	r := db.QueryRow("SELECT timestamp, etag, results FROM results WHERE hash = ?", hash[:])
 
 	var timestamp int64
 	var results string
-	err := r.Scan(&timestamp, &results)
+	var etag sql.NullString
+	err := r.Scan(&timestamp, &etag, &results)
 	if err != nil {
-		return time.Now(), "", errors.New(err)
+		return time.Now(), "", "", errors.New(err)
 	}
 
-	return time.Unix(timestamp, 0), results, nil
+	return time.Unix(timestamp, 0), etag.String, results, nil
 }

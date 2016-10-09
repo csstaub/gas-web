@@ -57,7 +57,6 @@ func main() {
 	}
 
 	r := mux.NewRouter()
-	r.HandleFunc("/_status", statusHandler).Methods("GET")
 	r.HandleFunc("/queue/github.com/{user:[a-zA-Z-0-9-_]+}/{repo:[a-zA-Z0-9-_]+}", w.queueRequest).Methods("POST")
 	r.HandleFunc("/results/github.com/{user:[a-zA-Z0-9-_]+}/{repo:[a-zA-Z0-9-_]+}", serveResults(w.db)).Methods("GET")
 
@@ -102,10 +101,6 @@ func migrate(db *sql.DB) {
 	logger.Printf("ran migrations up to version %d", desiredVersion)
 }
 
-func statusHandler(resp http.ResponseWriter, req *http.Request) {
-	resp.WriteHeader(http.StatusOK)
-}
-
 func serveResults(db database) func(resp http.ResponseWriter, req *http.Request) {
 	return func(resp http.ResponseWriter, req *http.Request) {
 		vars := mux.Vars(req)
@@ -118,11 +113,12 @@ func serveResults(db database) func(resp http.ResponseWriter, req *http.Request)
 			resp.WriteHeader(http.StatusInternalServerError)
 		}
 
-		t, r, err := db.fetchResults(path)
+		t, _, r, err := db.fetchResults(path)
 		if err != nil {
 			if !locked {
 				resp.WriteHeader(http.StatusNotFound)
 			} else {
+				resp.Header().Set("Content-Type", "application/json")
 				raw, _ := json.Marshal(map[string]interface{}{
 					"time":       time.Now(),
 					"repo":       fmt.Sprintf("github.com/%s/%s", user, repo),
@@ -140,6 +136,9 @@ func serveResults(db database) func(resp http.ResponseWriter, req *http.Request)
 			resp.WriteHeader(http.StatusInternalServerError)
 			return
 		}
+
+		resp.Header().Set("Content-Type", "application/json")
+		resp.Header().Set("Cache-Control", fmt.Sprintf("max-age:%d", 1*time.Hour/time.Second))
 
 		raw, _ := json.Marshal(map[string]interface{}{
 			"time":       t,

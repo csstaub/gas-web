@@ -44,63 +44,99 @@ func (w *worker) run() {
 	for repo := range w.reqs {
 		// Process
 		logger.Printf("node %s processing request for %s", nodeID, repo)
-		out, err := w.process(nodeID, repo)
+		out, etag, err := w.process(nodeID, repo)
 		logError(fmt.Sprintf("node %s worker error", nodeID), err)
 
 		if out != nil && err == nil {
 			path := fmt.Sprintf("github.com/%s", repo)
 			res, _ := json.Marshal(out)
-			err := w.db.storeResults(path, string(res))
+			err := w.db.storeResults(path, etag, string(res))
 			logError("unable to store results", err)
 		}
 	}
 }
 
-func (w *worker) process(nodeID, repo string) (*gas.Analyzer, error) {
+func (w *worker) process(nodeID, repo string) (*gas.Analyzer, string, error) {
 	defer func() {
 		logError(fmt.Sprintf("panic processing %s", repo), recover())
 	}()
 
 	path := fmt.Sprintf("github.com/%s", repo)
-	t, _, err := w.db.fetchResults(path)
-	if err == nil && t.Add(5*time.Minute).After(time.Now()) {
-		logger.Printf("node %s skipping %s, results less than 5 minutes old", nodeID, repo)
-		return nil, nil
+	t, etag, _, err := w.db.fetchResults(path)
+	if err == nil && t.Add(1*time.Hour).After(time.Now()) {
+		logger.Printf("node %s skipping %s, results less than 1 hour old", nodeID, repo)
+		return nil, "", nil
 	}
 
 	// Acquire lock
 	locked := time.Now()
 	lock, err := w.db.lockPath(nodeID, path, 5*time.Minute)
 	if err != nil {
-		return nil, errors.WrapPrefix(err, "error acquiring lock", 0)
+		return nil, "", errors.WrapPrefix(err, "error acquiring lock", 0)
 	}
 	if lock == nil {
 		logger.Printf("node %s skipping %s, already locked", nodeID, repo)
-		return nil, nil
+		return nil, "", nil
 	}
 	defer lock.unlock()
 
 	analyzer := buildAnalyzer()
-	url := fmt.Sprintf("http://api.github.com/repos/%s/tarball", repo)
+	url := fmt.Sprintf("https://api.github.com/repos/%s/tarball", repo)
 
 	dir, err := ioutil.TempDir("", "gas-web")
 	if err != nil {
-		return nil, errors.WrapPrefix(err, fmt.Sprintf("unable to process %s", repo), 0)
+		return nil, "", errors.WrapPrefix(err, fmt.Sprintf("unable to process %s", repo), 0)
 	}
 	defer os.RemoveAll(dir)
 
-	res, err := http.Get(url)
+	req, err := http.NewRequest("HEAD", url, nil)
 	if err != nil {
-		return nil, errors.WrapPrefix(err, fmt.Sprintf("unable to process %s", repo), 0)
+		return nil, "", errors.WrapPrefix(err, fmt.Sprintf("unable to process %s", repo), 0)
+	}
+
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, "", errors.WrapPrefix(err, fmt.Sprintf("unable to process %s", repo), 0)
+	}
+
+	io.Copy(ioutil.Discard, res.Body)
+	res.Body.Close()
+
+	serverTag := res.Header.Get("ETag")
+	if serverTag != "" && etag == serverTag {
+		logger.Printf("node %s skipping %s, not modified since last fetch", nodeID, repo)
+		return nil, "", nil
+	}
+
+	req, err = http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, "", errors.WrapPrefix(err, fmt.Sprintf("unable to process %s", repo), 0)
+	}
+
+	if etag != "" {
+		req.Header.Add("If-None-Match", etag)
+	}
+
+	res, err = http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, "", errors.WrapPrefix(err, fmt.Sprintf("unable to process %s", repo), 0)
+	}
+	defer io.Copy(ioutil.Discard, res.Body)
+	defer res.Body.Close()
+
+	if res.StatusCode == 304 {
+		// Not modified since last fetch
+		logger.Printf("node %s skipping %s, not modified since last fetch", nodeID, repo)
+		return nil, "", nil
 	}
 
 	if res.StatusCode != 200 {
-		return nil, errors.Errorf("unable to process %s (%s)", repo, res.Status)
+		return nil, "", errors.Errorf("unable to process %s (%s)", repo, res.Status)
 	}
 
 	unzipped, err := gzip.NewReader(res.Body)
 	if err != nil {
-		return nil, errors.WrapPrefix(err, fmt.Sprintf("unable to process %s", repo), 0)
+		return nil, "", errors.WrapPrefix(err, fmt.Sprintf("unable to process %s", repo), 0)
 	}
 
 	tar := tar.NewReader(unzipped)
@@ -109,7 +145,7 @@ func (w *worker) process(nodeID, repo string) (*gas.Analyzer, error) {
 		if time.Now().After(locked.Add(1 * time.Minute)) {
 			err = lock.refresh()
 			if err != nil {
-				return nil, errors.WrapPrefix(err, "lost lock, aborting", 0)
+				return nil, "", errors.WrapPrefix(err, "lost lock, aborting", 0)
 			}
 		}
 
@@ -117,14 +153,14 @@ func (w *worker) process(nodeID, repo string) (*gas.Analyzer, error) {
 		if err == io.EOF {
 			break
 		} else if err != nil {
-			return nil, errors.WrapPrefix(err, fmt.Sprintf("unable to process %s", repo), 0)
+			return nil, "", errors.WrapPrefix(err, fmt.Sprintf("unable to process %s", repo), 0)
 		}
 
 		path := filepath.Join(dir, header.Name)
 		info := header.FileInfo()
 		if info.IsDir() {
 			if err = os.MkdirAll(path, info.Mode()); err != nil {
-				return nil, errors.WrapPrefix(err, fmt.Sprintf("unable to process %s", repo), 0)
+				return nil, "", errors.WrapPrefix(err, fmt.Sprintf("unable to process %s", repo), 0)
 			}
 			continue
 		}
@@ -138,18 +174,18 @@ func (w *worker) process(nodeID, repo string) (*gas.Analyzer, error) {
 
 		file, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, info.Mode())
 		if err != nil {
-			return nil, errors.WrapPrefix(err, fmt.Sprintf("unable to process %s", repo), 0)
+			return nil, "", errors.WrapPrefix(err, fmt.Sprintf("unable to process %s", repo), 0)
 		}
 		defer file.Close()
 
 		_, err = io.Copy(file, tar)
 		if err != nil {
-			return nil, errors.WrapPrefix(err, fmt.Sprintf("unable to process %s", repo), 0)
+			return nil, "", errors.WrapPrefix(err, fmt.Sprintf("unable to process %s", repo), 0)
 		}
 
 		analyzer.Process(path)
 		if err != nil {
-			return nil, errors.WrapPrefix(err, fmt.Sprintf("unable to process %s", repo), 0)
+			return nil, "", errors.WrapPrefix(err, fmt.Sprintf("unable to process %s", repo), 0)
 		}
 
 		os.Remove(path)
@@ -161,5 +197,5 @@ func (w *worker) process(nodeID, repo string) (*gas.Analyzer, error) {
 	}
 
 	logger.Printf("node %s done processing %s", nodeID, repo)
-	return analyzer, nil
+	return analyzer, res.Header.Get("ETag"), nil
 }
