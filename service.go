@@ -57,9 +57,13 @@ func main() {
 	}
 
 	r := mux.NewRouter()
-	r.HandleFunc("/_status", statusHandler)
-	r.HandleFunc("/queue/github.com/{user:[a-zA-Z-_]+}/{repo:[a-zA-Z-_]+}", w.queueRequest)
-	r.HandleFunc("/results/github.com/{user:[a-zA-Z-_]+}/{repo:[a-zA-Z-_]+}", serveResults(w.db))
+	r.HandleFunc("/_status", statusHandler).Methods("GET")
+	r.HandleFunc("/queue/github.com/{user:[a-zA-Z-0-9-_]+}/{repo:[a-zA-Z0-9-_]+}", w.queueRequest).Methods("POST")
+	r.HandleFunc("/results/github.com/{user:[a-zA-Z0-9-_]+}/{repo:[a-zA-Z0-9-_]+}", serveResults(w.db)).Methods("GET")
+
+	base := os.Getenv("GOPATH")
+	assets := path.Join(base, "src/github.com/csstaub/gas-web/assets")
+	r.PathPrefix("/").Handler(http.FileServer(http.Dir(assets)))
 
 	for i := 0; i < runtime.NumCPU(); i++ {
 		go w.run()
@@ -109,16 +113,19 @@ func serveResults(db database) func(resp http.ResponseWriter, req *http.Request)
 		repo := vars["repo"]
 
 		path := fmt.Sprintf("github.com/%s/%s", user, repo)
+		locked, err := db.isLocked(path)
+		if err != nil {
+			resp.WriteHeader(http.StatusInternalServerError)
+		}
+
 		t, r, err := db.fetchResults(path)
 		if err != nil {
-			locked, err := db.isLocked(path)
-			if err != nil {
-				resp.WriteHeader(http.StatusInternalServerError)
-			} else if !locked {
+			if !locked {
 				resp.WriteHeader(http.StatusNotFound)
 			} else {
 				raw, _ := json.Marshal(map[string]interface{}{
 					"time":       time.Now(),
+					"repo":       fmt.Sprintf("github.com/%s/%s", user, repo),
 					"processing": true,
 				})
 				resp.Write(raw)
@@ -135,8 +142,10 @@ func serveResults(db database) func(resp http.ResponseWriter, req *http.Request)
 		}
 
 		raw, _ := json.Marshal(map[string]interface{}{
-			"time":    t,
-			"results": res,
+			"time":       t,
+			"repo":       fmt.Sprintf("github.com/%s/%s", user, repo),
+			"results":    res,
+			"processing": locked,
 		})
 		resp.Write(raw)
 	}

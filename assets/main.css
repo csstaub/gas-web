@@ -1,0 +1,11 @@
+div.issue div.tag, div.panel-block input[type="checkbox"] {
+  margin-right: 0.5em;
+}
+
+label.disabled {
+  text-decoration: line-through;
+}
+
+.borderless {
+  border: none !important;
+}
