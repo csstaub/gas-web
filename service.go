@@ -14,7 +14,6 @@ import (
 	"bitbucket.org/liamstask/goose/lib/goose"
 
 	"github.com/gorilla/mux"
-	"github.com/rs/cors"
 )
 
 const (
@@ -101,7 +100,7 @@ func main() {
 	}
 
 	logger.Printf("listening on %s", addr)
-	if err := http.ListenAndServe(addr, cors.Default().Handler(r)); err != nil {
+	if err := http.ListenAndServe(addr, r); err != nil {
 		logger.Fatal(err)
 	}
 }

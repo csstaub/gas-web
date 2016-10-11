@@ -45,12 +45,35 @@ var Issue = React.createClass({
   }
 });
 
+var Stats = React.createClass({
+  render: function() {
+    return (
+      <p className="help">
+        Last updated { new Date(this.props.data.time).toLocaleString() }.
+        Scanned { this.props.data.results.metrics.files.toLocaleString() } files
+        with { this.props.data.results.metrics.lines.toLocaleString() } lines of code.
+      </p>
+    );
+  }
+});
+
 var Issues = React.createClass({
   render: function() {
-    if (this.props.data.results.issues.length === 0) {
+    if (this.props.data.results.metrics.files === 0) {
       return (
         <div className="notification">
-          Awesome! No issues found!
+          No source files found. Do you even Go?
+        </div>
+      );
+    }
+
+    if (this.props.data.results.issues.length === 0) {
+      return (
+        <div>
+          <div className="notification">
+            Awesome! No issues found!
+          </div>
+          <Stats data={ this.props.data } />
         </div>
       );
     }
@@ -68,9 +91,12 @@ var Issues = React.createClass({
 
     if (issues.length === 0) {
       return (
-        <div className="notification">
-          No issues matched given filters
-          (of total { this.props.data.results.issues.length } issues).
+        <div>
+          <div className="notification">
+            No issues matched given filters
+            (of total { this.props.data.results.issues.length } issues).
+          </div>
+          <Stats data={ this.props.data } />
         </div>
       );
     }
@@ -78,11 +104,7 @@ var Issues = React.createClass({
     return (
       <div className="issues">
         { issues }
-        <p className="help">
-          Last updated { new Date(this.props.data.time).toLocaleString() }.
-          Scanned { this.props.data.results.metrics.files.toLocaleString() } files
-          with { this.props.data.results.metrics.lines.toLocaleString() } lines of code.
-        </p>
+        <Stats data={ this.props.data } />
       </div>
     );
   }
