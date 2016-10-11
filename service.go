@@ -91,8 +91,8 @@ func main() {
 		}}
 
 	r := mux.NewRouter()
-	r.HandleFunc("/queue/github.com/{user:[a-zA-Z-0-9-_]+}/{repo:[a-zA-Z0-9-_]+}", h.HandleFunc(w.queueRequest)).Methods("POST")
-	r.HandleFunc("/results/github.com/{user:[a-zA-Z0-9-_]+}/{repo:[a-zA-Z0-9-_]+}", h.HandleFunc(serveResults(w.db))).Methods("GET")
+	r.HandleFunc("/queue/github.com/{user:[a-zA-Z-0-9-_.]+}/{repo:[a-zA-Z0-9-_.]+}", h.HandleFunc(w.queueRequest)).Methods("POST")
+	r.HandleFunc("/results/github.com/{user:[a-zA-Z0-9-_.]+}/{repo:[a-zA-Z0-9-_.]+}", h.HandleFunc(serveResults(w.db))).Methods("GET")
 
 	r.PathPrefix("/").Handler(h.Handler(http.FileServer(http.Dir("assets/dist"))))
 

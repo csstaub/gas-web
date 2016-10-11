@@ -303,7 +303,7 @@ var RepoSelector = React.createClass({
     return { repo: "", valid: true };
   },
   updateRepo: function(e) {
-    var re = /^[a-zA-Z-0-9-_]+\/[a-zA-Z-0-9-_]+$/;
+    var re = /^[a-zA-Z-0-9-_.]+\/[a-zA-Z-0-9-_.]+$/;
     this.setState({
       repo: e.target.value,
       valid: this.state.valid || re.test(e.target.value)
@@ -311,7 +311,7 @@ var RepoSelector = React.createClass({
   },
   submitForm: function(e) {
     e.preventDefault();
-    var re = /^[a-zA-Z-0-9-_]+\/[a-zA-Z-0-9-_]+$/;
+    var re = /^[a-zA-Z-0-9-_.]+\/[a-zA-Z-0-9-_.]+$/;
     var valid = re.test(this.state.repo);
     if (!valid) {
       this.setState({valid: valid});
