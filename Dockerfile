@@ -20,10 +20,10 @@ RUN \
 	# Install go for building.
 	apk add -U go gcc g++ make nodejs && \
 	# Compile our app
-	go build -o /go/bin/gas-web . && \
+	go build -o /go/bin/gas-web . && rm -rf vendor && \
   cd assets && npm i && npm run-script build && cd .. && \
   # Delete deps, toolchain to save space
-  rm -rf /root/.npm /tmp/* vendor assets/node_modules $GOPATH/pkg && \
+  rm -rf /root/.npm /tmp/* assets/node_modules $GOPATH/pkg && \
 	apk del go nodejs gcc g++ make && \
   rm -rf /var/cache/apk/*
 

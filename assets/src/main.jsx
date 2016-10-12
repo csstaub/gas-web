@@ -19,6 +19,9 @@ var IssueTag = React.createClass({
 });
 
 var Issue = React.createClass({
+  componentDidMount: function() {
+    hljs.highlightBlock($(ReactDOM.findDOMNode(this)).find("pre code")[0]);
+  },
 	render: function() {
     return (
       <div className="issue box">
@@ -35,7 +38,7 @@ var Issue = React.createClass({
         </p>
         <figure className="highlight">
           <pre>
-            <code className="go hljs">
+            <code className="golang hljs">
               { this.props.data.code }
             </code>
           </pre>

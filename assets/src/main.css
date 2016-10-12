@@ -9,3 +9,7 @@ label.disabled {
 .borderless {
   border: none !important;
 }
+
+code.hljs {
+  padding: 1em;
+}
