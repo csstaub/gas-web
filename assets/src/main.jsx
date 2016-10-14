@@ -20,7 +20,7 @@ var IssueTag = React.createClass({
 
 var Issue = React.createClass({
   componentDidMount: function() {
-    hljs.highlightBlock($(ReactDOM.findDOMNode(this)).find("pre code")[0]);
+    hljs.highlightBlock(ReactDOM.findDOMNode(this).querySelector("pre code"));
   },
 	render: function() {
     return (
@@ -220,24 +220,18 @@ var IssueBrowser = React.createClass({
     this.setState({confidence: val});
   },
   loadIssues: function() {
-    $.ajax({
+    reqwest({
       url: "/results/github.com/" + this.props.repo,
-      dataType: "json",
-      cache: true,
+      type: "json",
       success: function(data) {
         this.updateIssues(data);
       }.bind(this),
-      error: function(xhr, status, err) {
-        this.setState({error: err.toString()});
+      error: function(xhr) {
+        this.setState({error: xhr.statusText});
       }.bind(this)
     });
   },
   updateIssues: function(data) {
-    if (data.processing) {
-      // Try again in 1s
-      setTimeout(this.loadIssues, 1000);
-    }
-
     if (!data.results) {
       this.setState({data: data});
       return;
@@ -280,7 +274,7 @@ var IssueBrowser = React.createClass({
       );
     }
 
-    if (this.state.data === undefined || this.state.data.processing) {
+    if (this.state.data === undefined) {
       // Still loading and/or processing on backend
       return (
         <div className="content has-text-centered">
@@ -342,16 +336,7 @@ var RepoSelector = React.createClass({
       this.setState({valid: valid});
       return;
     }
-    $.ajax({
-      type: "POST",
-      url: "/queue/github.com/" + this.state.repo,
-      success: function(data) {
-        location.href = '/#' + this.state.repo;
-      }.bind(this),
-      error: function(xhr, status, err) {
-        this.setState({error: err.toString()});
-      }.bind(this)
-    });
+    location.href = '/#' + this.state.repo;
   },
   render: function() {
     if (this.state.error) {
@@ -407,19 +392,21 @@ var RepoSelector = React.createClass({
 });
 
 function render() {
-  var repo = window.location.hash.replace(/^#\/?|\/$/g, '');
+  var repo = window.location.hash.replace(/^#\/?|\/$/g, "");
+  console.log("rendering: " + repo);
+
   if (!repo) {
     ReactDOM.render(
-      <RepoSelector />,
+      <RepoSelector key={ Date.now() } />,
       document.getElementById("content")
     );
   } else {
     ReactDOM.render(
-      <IssueBrowser repo={ repo } />,
+      <IssueBrowser key={ Date.now() } repo={ repo } />,
       document.getElementById("content")
     );
   }
 }
 
-render();
-window.addEventListener('hashchange', render, false);
+window.addEventListener("hashchange", render, false);
+window.dispatchEvent(new HashChangeEvent("hashchange"));

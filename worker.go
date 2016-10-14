@@ -3,6 +3,7 @@ package main
 import (
 	"archive/tar"
 	"compress/gzip"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -19,21 +20,19 @@ import (
 	uuid "github.com/satori/go.uuid"
 )
 
+var errNotFound = errors.New("not found")
+
 type worker struct {
 	db   database
 	reqs chan string
 }
 
-func (w *worker) queueRequest(resp http.ResponseWriter, req *http.Request) {
-	vars := mux.Vars(req)
-	user := vars["user"]
-	repo := vars["repo"]
-
+func (w *worker) queueRequest(user, repo string) bool {
 	select {
 	case w.reqs <- fmt.Sprintf("%s/%s", user, repo):
-		resp.WriteHeader(http.StatusAccepted)
+		return true
 	case <-time.After(100 * time.Millisecond):
-		resp.WriteHeader(http.StatusServiceUnavailable)
+		return false
 	}
 }
 
@@ -45,12 +44,18 @@ func (w *worker) run() {
 		// Process
 		logger.Printf("node %s processing request for %s", nodeID, repo)
 		out, etag, err := w.process(nodeID, repo)
-		logError(fmt.Sprintf("node %s worker error", nodeID), err)
 
-		if out != nil && err == nil {
-			path := fmt.Sprintf("github.com/%s", repo)
+		if err != errNotFound {
+			logError(fmt.Sprintf("node %s worker error", nodeID), err)
+		}
+
+		path := fmt.Sprintf("github.com/%s", repo)
+		if err == errNotFound {
+			err := w.db.storeResults(path, "", "", true)
+			logError("unable to store results", err)
+		} else if out != nil && err == nil {
 			res, _ := json.Marshal(out)
-			err := w.db.storeResults(path, etag, string(res))
+			err := w.db.storeResults(path, etag, string(res), false)
 			logError("unable to store results", err)
 		}
 	}
@@ -62,7 +67,7 @@ func (w *worker) process(nodeID, repo string) (*gas.Analyzer, string, error) {
 	}()
 
 	path := fmt.Sprintf("github.com/%s", repo)
-	t, etag, _, err := w.db.fetchResults(path)
+	t, etag, _, _, err := w.db.fetchResults(path)
 	if err == nil && t.Add(1*time.Hour).After(time.Now()) {
 		logger.Printf("node %s skipping %s, results less than 1 hour old", nodeID, repo)
 		return nil, "", nil
@@ -102,6 +107,20 @@ func (w *worker) process(nodeID, repo string) (*gas.Analyzer, string, error) {
 	io.Copy(ioutil.Discard, res.Body)
 	res.Body.Close()
 
+	if res.StatusCode == 304 {
+		// Not modified since last fetch
+		logger.Printf("node %s skipping %s, not modified since last fetch", nodeID, repo)
+		return nil, "", nil
+	}
+
+	if res.StatusCode == 404 {
+		return nil, "", errNotFound
+	}
+
+	if res.StatusCode != 200 {
+		return nil, "", errors.Errorf("unable to process %s (%s)", repo, res.Status)
+	}
+
 	serverTag := res.Header.Get("ETag")
 	if serverTag != "" && etag == serverTag {
 		logger.Printf("node %s skipping %s, not modified since last fetch", nodeID, repo)
@@ -128,6 +147,10 @@ func (w *worker) process(nodeID, repo string) (*gas.Analyzer, string, error) {
 		// Not modified since last fetch
 		logger.Printf("node %s skipping %s, not modified since last fetch", nodeID, repo)
 		return nil, "", nil
+	}
+
+	if res.StatusCode == 404 {
+		return nil, "", errNotFound
 	}
 
 	if res.StatusCode != 200 {
@@ -198,4 +221,85 @@ func (w *worker) process(nodeID, repo string) (*gas.Analyzer, string, error) {
 
 	logger.Printf("node %s done processing %s", nodeID, repo)
 	return analyzer, res.Header.Get("ETag"), nil
+}
+
+func writeResults(resp http.ResponseWriter, t time.Time, path, res string, missing bool) {
+	if missing {
+		resp.WriteHeader(http.StatusNotFound)
+		return
+	}
+
+	if res == "" {
+		resp.WriteHeader(http.StatusNotFound)
+		return
+	}
+
+	results := map[string]interface{}{}
+	err := json.Unmarshal([]byte(res), &results)
+	if err != nil {
+		logger.Printf("invalid JSON document at path %s", path)
+		resp.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	lifetime := time.Now().Sub(t.Add(5*time.Minute)) / time.Second
+	if lifetime < 0 {
+		lifetime = 0
+	}
+
+	resp.WriteHeader(http.StatusOK)
+	resp.Header().Set("Content-Type", "application/json")
+	resp.Header().Set("Cache-Control", fmt.Sprintf("max-age:%d", lifetime))
+	raw, _ := json.Marshal(map[string]interface{}{
+		"time":    t,
+		"repo":    path,
+		"results": results,
+	})
+	resp.Write(raw)
+}
+
+func (w *worker) serveResults(resp http.ResponseWriter, req *http.Request) {
+	vars := mux.Vars(req)
+	user := vars["user"]
+	repo := vars["repo"]
+
+	path := fmt.Sprintf("github.com/%s/%s", user, repo)
+
+	if !w.queueRequest(user, repo) {
+		resp.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
+
+	t1, _, res, missing, err := w.db.fetchResults(path)
+	if err != nil && err != sql.ErrNoRows {
+		logError(fmt.Sprintf("unable to fetch results for path %s", path), err)
+		resp.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if time.Now().Before(t1.Add(1*time.Hour)) && err == nil {
+		writeResults(resp, t1, path, res, missing)
+		return
+	}
+
+	// Wait for at most 60 seconds for results to appear
+	for i := 0; i < 60; i++ {
+		t2, _, res, missing, err := w.db.fetchResults(path)
+		if err != nil && err != sql.ErrNoRows {
+			logError(fmt.Sprintf("unable to fetch results for path %s", path), err)
+			resp.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		if err == sql.ErrNoRows || t1.Equal(t2) {
+			// No new results yet
+			time.Sleep(1 * time.Second)
+			continue
+		}
+
+		writeResults(resp, t2, path, res, missing)
+		return
+	}
+
+	resp.WriteHeader(http.StatusServiceUnavailable)
 }

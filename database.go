@@ -22,8 +22,8 @@ type database interface {
 	isLocked(path string) (bool, error)
 
 	// Results storage
-	storeResults(path, etag, results string) error
-	fetchResults(path string) (time.Time, string, string, error)
+	storeResults(path, etag, results string, missing bool) error
+	fetchResults(path string) (time.Time, string, string, bool, error)
 }
 
 type sqlDatabase struct {
@@ -164,29 +164,32 @@ func (sl *sqlLock) unlock() error {
 	return nil
 }
 
-func (db *sqlDatabase) storeResults(path, etag, results string) error {
+func (db *sqlDatabase) storeResults(path, etag, results string, missing bool) error {
 	hash := sha256.Sum256([]byte(path))
 	_, err := db.Exec(
-		`INSERT INTO results (hash, timestamp, etag, results) VALUES (?, ?, ?, ?) 
-		 ON DUPLICATE KEY UPDATE timestamp = ?, etag = ?, results = ?`,
-		hash[:], time.Now().Unix(), etag, results, time.Now().Unix(), etag, results)
+		`INSERT INTO results (hash, timestamp, etag, results, missing) VALUES (?, ?, ?, ?, ?) 
+		 ON DUPLICATE KEY UPDATE timestamp = ?, etag = ?, results = ?, missing = ?`,
+		hash[:], time.Now().Unix(), etag, results, missing, time.Now().Unix(), etag, results, missing)
 	if err != nil {
 		return errors.New(err)
 	}
 	return nil
 }
 
-func (db *sqlDatabase) fetchResults(path string) (time.Time, string, string, error) {
+func (db *sqlDatabase) fetchResults(path string) (time.Time, string, string, bool, error) {
 	hash := sha256.Sum256([]byte(path))
-	r := db.QueryRow("SELECT timestamp, etag, results FROM results WHERE hash = ?", hash[:])
+	r := db.QueryRow("SELECT timestamp, etag, results, missing FROM results WHERE hash = ?", hash[:])
 
 	var timestamp int64
 	var results string
 	var etag sql.NullString
-	err := r.Scan(&timestamp, &etag, &results)
-	if err != nil {
-		return time.Now(), "", "", errors.New(err)
+	var missing sql.NullBool
+	err := r.Scan(&timestamp, &etag, &results, &missing)
+	if err == sql.ErrNoRows {
+		return time.Now(), "", "", false, err
+	} else if err != nil {
+		return time.Now(), "", "", false, errors.New(err)
 	}
 
-	return time.Unix(timestamp, 0), etag.String, results, nil
+	return time.Unix(timestamp, 0), etag.String, results, missing.Valid && missing.Bool, nil
 }
