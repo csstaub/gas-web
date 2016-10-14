@@ -20,7 +20,10 @@ import (
 	uuid "github.com/satori/go.uuid"
 )
 
-var errNotFound = errors.New("not found")
+var (
+	errNotModified = errors.New("not modified")
+	errNotFound    = errors.New("not found")
+)
 
 type worker struct {
 	db   database
@@ -45,7 +48,7 @@ func (w *worker) run() {
 		logger.Printf("node %s processing request for %s", nodeID, repo)
 		out, etag, err := w.process(nodeID, repo)
 
-		if err != errNotFound {
+		if err != errNotFound && err != errNotModified {
 			logError(fmt.Sprintf("node %s worker error", nodeID), err)
 		}
 
@@ -53,6 +56,9 @@ func (w *worker) run() {
 		if err == errNotFound {
 			err := w.db.storeResults(path, "", "", true)
 			logError("unable to store results", err)
+		} else if err == errNotModified {
+			err := w.db.updateTimestamp(path)
+			logError("unable to update timestamp", err)
 		} else if out != nil && err == nil {
 			res, _ := json.Marshal(out)
 			err := w.db.storeResults(path, etag, string(res), false)
@@ -110,7 +116,7 @@ func (w *worker) process(nodeID, repo string) (*gas.Analyzer, string, error) {
 	if res.StatusCode == 304 {
 		// Not modified since last fetch
 		logger.Printf("node %s skipping %s, not modified since last fetch", nodeID, repo)
-		return nil, "", nil
+		return nil, "", errNotModified
 	}
 
 	if res.StatusCode == 404 {
@@ -124,7 +130,7 @@ func (w *worker) process(nodeID, repo string) (*gas.Analyzer, string, error) {
 	serverTag := res.Header.Get("ETag")
 	if serverTag != "" && etag == serverTag {
 		logger.Printf("node %s skipping %s, not modified since last fetch", nodeID, repo)
-		return nil, "", nil
+		return nil, "", errNotModified
 	}
 
 	req, err = http.NewRequest("GET", url, nil)
@@ -146,7 +152,7 @@ func (w *worker) process(nodeID, repo string) (*gas.Analyzer, string, error) {
 	if res.StatusCode == 304 {
 		// Not modified since last fetch
 		logger.Printf("node %s skipping %s, not modified since last fetch", nodeID, repo)
-		return nil, "", nil
+		return nil, "", errNotModified
 	}
 
 	if res.StatusCode == 404 {

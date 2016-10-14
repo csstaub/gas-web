@@ -24,6 +24,7 @@ type database interface {
 	// Results storage
 	storeResults(path, etag, results string, missing bool) error
 	fetchResults(path string) (time.Time, string, string, bool, error)
+	updateTimestamp(path string) error
 }
 
 type sqlDatabase struct {
@@ -192,4 +193,15 @@ func (db *sqlDatabase) fetchResults(path string) (time.Time, string, string, boo
 	}
 
 	return time.Unix(timestamp, 0), etag.String, results, missing.Valid && missing.Bool, nil
+}
+
+func (db *sqlDatabase) updateTimestamp(path string) error {
+	hash := sha256.Sum256([]byte(path))
+	_, err := db.Exec(
+		`UPDATE results SET timestamp = ? WHERE hash = ?`,
+		time.Now().Unix(), hash[:])
+	if err != nil {
+		return errors.New(err)
+	}
+	return nil
 }

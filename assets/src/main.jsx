@@ -255,10 +255,20 @@ var IssueBrowser = React.createClass({
         return !pos || item != ary[pos - 1];
       });
 
+    var selectedSeverities = allSeverities;
+    if (allSeverities.length > 1) {
+      selectedSeverities = selectedSeverities.filter(function(i) { return i != "LOW" });
+    }
+
+    var selectedConfidences = allConfidences;
+    if (allConfidences.length > 1) {
+      selectedConfidences = selectedConfidences.filter(function(i) { return i != "LOW" });
+    }
+
     this.setState({
       data: data,
-      severity: allSeverities.filter(function(i) { return i != "LOW" }),
-      confidence: allConfidences.filter(function(i) { return i != "LOW" }),
+      severity: selectedSeverities,
+      confidence: selectedConfidences,
       allSeverities: allSeverities,
       allConfidences: allConfidences
     });
@@ -393,7 +403,6 @@ var RepoSelector = React.createClass({
 
 function render() {
   var repo = window.location.hash.replace(/^#\/?|\/$/g, "");
-  console.log("rendering: " + repo);
 
   if (!repo) {
     ReactDOM.render(
