@@ -197,6 +197,7 @@ func (w *worker) process(nodeID, repo string) (*gas.Analyzer, string, error) {
 		if !info.Mode().IsRegular() ||
 			!strings.HasSuffix(header.Name, ".go") ||
 			strings.Contains(header.Name, "vendor/") ||
+			strings.Contains(header.Name, "testdata/") ||
 			strings.HasSuffix(header.Name, "_test.go") {
 			continue
 		}
@@ -288,8 +289,8 @@ func (w *worker) serveResults(resp http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// Wait for at most 60 seconds for results to appear
-	for i := 0; i < 60; i++ {
+	// Wait for at most 20 seconds for results to appear
+	for i := 0; i < 20; i++ {
 		t2, _, res, missing, err := w.db.fetchResults(path)
 		if err != nil && err != sql.ErrNoRows {
 			logError(fmt.Sprintf("unable to fetch results for path %s", path), err)

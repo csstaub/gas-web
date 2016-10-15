@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	archiveFileLimit = 10000
+	archiveFileLimit = 5000
 )
 
 var (
