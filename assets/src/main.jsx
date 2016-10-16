@@ -350,8 +350,8 @@ var RepoSelector = React.createClass({
   updateRepo: function(e) {
     var re = /^[a-zA-Z-0-9-_.]+\/[a-zA-Z-0-9-_.]+$/;
     this.setState({
-      repo: e.target.value,
-      valid: this.state.valid || re.test(e.target.value)
+      repo: e.target.value.trim(),
+      valid: this.state.valid || re.test(e.target.value.trim())
     });
   },
   submitForm: function(e) {
