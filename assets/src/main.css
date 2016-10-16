@@ -1,4 +1,4 @@
-div.issue div.tag, div.panel-block input[type="checkbox"] {
+div.issue div.tag, div.panel-block input[type="checkbox"], div.issue a.icon {
   margin-right: 0.5em;
 }
 
@@ -8,6 +8,10 @@ label.disabled {
 
 .borderless {
   border: none !important;
+}
+
+.issue-title {
+  color: black !important;
 }
 
 code.hljs {

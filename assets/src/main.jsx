@@ -31,7 +31,15 @@ var Issue = React.createClass({
         </div>
         <p>
           <strong>
-            { this.props.data.file } (line { this.props.data.line })
+            <a className="icon borderless is-pulled-right"
+               href={ this.props.path + "/" + this.props.data.file + "#L" + this.props.data.line }
+               alt="Jump to code">
+               <i className="fa fa-code" aria-hidden="true"></i>
+            </a>
+            <a className="issue-title borderless"
+               href={ this.props.path + "/" + this.props.data.file + "#L" + this.props.data.line }>
+               { this.props.data.file } (line { this.props.data.line })
+            </a>
           </strong>
           <br/>
           { this.props.data.details.replace(/\.$/, "") }
@@ -81,6 +89,14 @@ var Issues = React.createClass({
       );
     }
 
+    var tag = this.props.data.tag;
+    if (!tag) {
+      tag = "master";
+    }
+
+    var repoPath =
+      "https://" + this.props.data.repo  + "/blob/" + tag;
+
 		var issues = this.props.data.results.issues
       .filter(function(issue) {
         return this.props.severity.includes(issue.severity);
@@ -89,8 +105,8 @@ var Issues = React.createClass({
         return this.props.confidence.includes(issue.confidence);
       }.bind(this))
       .map(function(issue) {
-        return (<Issue data={issue} />);
-		  });
+        return (<Issue path={repoPath} data={issue} />);
+		  }.bind(this));
 
     if (issues.length === 0) {
       return (

@@ -243,7 +243,7 @@ func (w *worker) process(nodeID, repo string) (*gas.Analyzer, string, error) {
 	return analyzer, res.Header.Get("ETag"), nil
 }
 
-func writeResults(resp http.ResponseWriter, t time.Time, path, res string, missing bool) {
+func writeResults(resp http.ResponseWriter, t time.Time, path, tag, res string, missing bool) {
 	if missing {
 		resp.WriteHeader(http.StatusNotFound)
 		return
@@ -273,6 +273,7 @@ func writeResults(resp http.ResponseWriter, t time.Time, path, res string, missi
 	raw, _ := json.Marshal(map[string]interface{}{
 		"time":    t,
 		"repo":    path,
+		"tag":     strings.Trim(tag, `"`),
 		"results": results,
 	})
 	resp.Write(raw)
@@ -290,7 +291,7 @@ func (w *worker) serveResults(resp http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	t1, _, res, missing, err := w.db.fetchResults(path)
+	t1, tag, res, missing, err := w.db.fetchResults(path)
 	if err != nil && err != sql.ErrNoRows {
 		logError(fmt.Sprintf("unable to fetch results for path %s", path), err)
 		resp.WriteHeader(http.StatusInternalServerError)
@@ -298,13 +299,13 @@ func (w *worker) serveResults(resp http.ResponseWriter, req *http.Request) {
 	}
 
 	if time.Now().Before(t1.Add(1*time.Hour)) && err == nil {
-		writeResults(resp, t1, path, res, missing)
+		writeResults(resp, t1, path, tag, res, missing)
 		return
 	}
 
 	// Wait for at most 20 seconds for results to appear
 	for i := 0; i < 20; i++ {
-		t2, _, res, missing, err := w.db.fetchResults(path)
+		t2, tag, res, missing, err := w.db.fetchResults(path)
 		if err != nil && err != sql.ErrNoRows {
 			logError(fmt.Sprintf("unable to fetch results for path %s", path), err)
 			resp.WriteHeader(http.StatusInternalServerError)
@@ -317,7 +318,7 @@ func (w *worker) serveResults(resp http.ResponseWriter, req *http.Request) {
 			continue
 		}
 
-		writeResults(resp, t2, path, res, missing)
+		writeResults(resp, t2, path, tag, res, missing)
 		return
 	}
 
