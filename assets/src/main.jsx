@@ -24,9 +24,12 @@ var IssueTag = React.createClass({
 
 var Issue = React.createClass({
   componentDidMount: function() {
-    hljs.highlightBlock(ReactDOM.findDOMNode(this).querySelector("pre code"));
+    this.highlightCode();
   },
   componentDidUpdate: function() {
+    this.highlightCode();
+  },
+  highlightCode: function() {
     hljs.highlightBlock(ReactDOM.findDOMNode(this).querySelector("pre code"));
   },
   render: function() {
@@ -272,8 +275,12 @@ var IssueBrowser = React.createClass({
   getInitialState: function() {
     return {};
   },
-  componentDidMount: function() {
+  componentWillMount: function() {
     this.loadIssues(this.props.repo);
+  },
+  componentWillReceiveProps: function(nextProps) {
+    this.setState({data: undefined, error: undefined});
+    this.loadIssues(nextProps.repo);
   },
   handleSeverity: function(val) {
     this.updateIssueTypes(this.state.data.results.issues, val, this.state.confidence);
@@ -286,9 +293,9 @@ var IssueBrowser = React.createClass({
   handleIssueType: function(val) {
     this.setState({issueType: val});
   },
-  loadIssues: function() {
+  loadIssues: function(repo) {
     reqwest({
-      url: "/results/github.com/" + this.props.repo,
+      url: "/results/github.com/" + repo,
       type: "json",
       success: function(data) {
         this.updateIssues(data);
@@ -502,12 +509,12 @@ function render() {
 
   if (!repo) {
     ReactDOM.render(
-      <RepoSelector key={ Date.now() } />,
+      <RepoSelector />,
       document.getElementById("content")
     );
   } else {
     ReactDOM.render(
-      <IssueBrowser key={ Date.now() } repo={ repo } />,
+      <IssueBrowser repo={ repo } />,
       document.getElementById("content")
     );
   }
