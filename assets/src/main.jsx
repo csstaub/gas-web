@@ -26,6 +26,9 @@ var Issue = React.createClass({
   componentDidMount: function() {
     hljs.highlightBlock(ReactDOM.findDOMNode(this).querySelector("pre code"));
   },
+  componentDidUpdate: function() {
+    hljs.highlightBlock(ReactDOM.findDOMNode(this).querySelector("pre code"));
+  },
   render: function() {
     return (
       <div className="issue box">
