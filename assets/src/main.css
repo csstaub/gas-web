@@ -17,3 +17,7 @@ label.disabled {
 code.hljs {
   padding: 1em;
 }
+
+nav.panel select {
+  width: 100%;
+}

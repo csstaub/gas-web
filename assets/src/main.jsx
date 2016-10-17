@@ -1,6 +1,10 @@
 require("./index.html");
 require("./main.css");
 
+function cleanupIssueType(details) {
+    return (details.charAt(0).toUpperCase() + details.slice(1)).replace(/\.$/, "");
+}
+
 var IssueTag = React.createClass({
   render: function() {
     var level = ""
@@ -42,7 +46,7 @@ var Issue = React.createClass({
             </a>
           </strong>
           <br/>
-          { this.props.data.details.replace(/\.$/, "") }
+          { cleanupIssueType(this.props.data.details) }
         </p>
         <figure className="highlight">
           <pre>
@@ -103,6 +107,13 @@ var Issues = React.createClass({
       }.bind(this))
       .filter(function(issue) {
         return this.props.confidence.includes(issue.confidence);
+      }.bind(this))
+      .filter(function(issue) {
+        if (this.props.issueType) {
+          return issue.details.toLowerCase().startsWith(this.props.issueType.toLowerCase());
+        } else {
+          return true
+        }
       }.bind(this))
       .map(function(issue) {
         return (<Issue path={repoPath} data={issue} />);
@@ -177,13 +188,29 @@ var LevelSelector = React.createClass({
 });
 
 var Navigation = React.createClass({
-  updateSeverity: function(values) {
-    this.props.onSeverity(values);
+  updateSeverity: function(vals) {
+    this.props.onSeverity(vals);
   },
-  updateConfidence: function(values) {
-    this.props.onConfidence(values);
+  updateConfidence: function(vals) {
+    this.props.onConfidence(vals);
+  },
+  updateIssueType: function(e) {
+    if (e.target.value == "all") {
+      this.props.onIssueType(null);
+    } else {
+      this.props.onIssueType(e.target.value);
+    }
   },
   render: function() {
+    var issueTypes = this.props.allIssueTypes
+      .map(function(it) {
+        return (
+          <option value={ it } selected={ this.props.issueType == it }>
+            { it }
+          </option>
+        );
+      }.bind(this));
+
     return (
       <nav className="panel">
         <div className="panel-heading">
@@ -217,6 +244,22 @@ var Navigation = React.createClass({
             available={ this.props.allConfidences }
             onChange={ this.updateConfidence } />
         </div>
+        <div className="panel-block">
+          <span className="panel-icon">
+            <i className="fa fa-info-circle"></i>
+          </span>
+          <strong>
+            Issue Type
+          </strong>
+        </div>
+        <div className="panel-block">
+          <select onChange={ this.updateIssueType }>
+            <option value="all" selected={ !this.props.issueType }>
+              (all)
+            </option>
+            { issueTypes }
+          </select>
+        </div>
       </nav>
     );
   }
@@ -230,10 +273,15 @@ var IssueBrowser = React.createClass({
     this.loadIssues(this.props.repo);
   },
   handleSeverity: function(val) {
+    this.updateIssueTypes(this.state.data.results.issues, val, this.state.confidence);
     this.setState({severity: val});
   },
   handleConfidence: function(val) {
+    this.updateIssueTypes(this.state.data.results.issues, this.state.severity, val);
     this.setState({confidence: val});
+  },
+  handleIssueType: function(val) {
+    this.setState({issueType: val});
   },
   loadIssues: function() {
     reqwest({
@@ -281,13 +329,38 @@ var IssueBrowser = React.createClass({
       selectedConfidences = selectedConfidences.filter(function(i) { return i != "LOW" });
     }
 
+    this.updateIssueTypes(data.results.issues, selectedSeverities, selectedConfidences);
+
     this.setState({
       data: data,
       severity: selectedSeverities,
-      confidence: selectedConfidences,
       allSeverities: allSeverities,
-      allConfidences: allConfidences
+      confidence: selectedConfidences,
+      allConfidences: allConfidences,
+      issueType: null
     });
+  },
+  updateIssueTypes: function(issues, severities, confidences) {
+    var allTypes = issues
+      .filter(function(issue) {
+        return severities.includes(issue.severity);
+      })
+      .filter(function(issue) {
+        return confidences.includes(issue.confidence);
+      })
+      .map(function(issue) {
+        return cleanupIssueType(issue.details).split(".")[0];
+      })
+      .sort()
+      .filter(function(item, pos, ary) {
+        return !pos || item != ary[pos - 1];
+      });
+
+    if (this.state.issueType && !allTypes.includes(this.state.issueType)) {
+      this.setState({issueType: null});
+    }
+
+    this.setState({allIssueTypes: allTypes});
   },
   render: function() {
     if (this.state.error) {
@@ -324,10 +397,13 @@ var IssueBrowser = React.createClass({
             <Navigation
               severity={ this.state.severity } 
               confidence={ this.state.confidence }
+              issueType={ this.state.issueType }
               allSeverities={ this.state.allSeverities } 
               allConfidences={ this.state.allConfidences }
+              allIssueTypes={ this.state.allIssueTypes }
               onSeverity={ this.handleSeverity } 
               onConfidence={ this.handleConfidence } 
+              onIssueType={ this.handleIssueType }
             />
           </div>
           <div className="column is-three-quarters">
@@ -335,6 +411,7 @@ var IssueBrowser = React.createClass({
               data={ this.state.data }
               severity={ this.state.severity }
               confidence={ this.state.confidence }
+              issueType={ this.state.issueType }
             />
           </div>
         </div>
