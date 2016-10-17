@@ -26,7 +26,7 @@ var Issue = React.createClass({
   componentDidMount: function() {
     hljs.highlightBlock(ReactDOM.findDOMNode(this).querySelector("pre code"));
   },
-	render: function() {
+  render: function() {
     return (
       <div className="issue box">
         <div className="is-pulled-right">
@@ -101,7 +101,7 @@ var Issues = React.createClass({
     var repoPath =
       "https://" + this.props.data.repo  + "/blob/" + tag;
 
-		var issues = this.props.data.results.issues
+    var issues = this.props.data.results.issues
       .filter(function(issue) {
         return this.props.severity.includes(issue.severity);
       }.bind(this))
@@ -117,7 +117,7 @@ var Issues = React.createClass({
       }.bind(this))
       .map(function(issue) {
         return (<Issue path={repoPath} data={issue} />);
-		  }.bind(this));
+      }.bind(this));
 
     if (issues.length === 0) {
       return (
@@ -219,7 +219,7 @@ var Navigation = React.createClass({
         <div className="panel-block">
           <span className="panel-icon">
             <i className="fa fa-exclamation-circle"></i>
-				  </span>
+          </span>
           <strong>
             Severity
           </strong>
