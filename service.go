@@ -98,6 +98,7 @@ func main() {
 			"X-Content-Type-Options":  "nosniff",
 			"X-Frame-Options":         "deny",
 			"X-XSS-Protection":        "1; mode=block",
+			"Cache-Control":           "max-age:7200",
 		}}
 
 	r := mux.NewRouter()

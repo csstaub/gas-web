@@ -262,12 +262,11 @@ func writeResults(resp http.ResponseWriter, t time.Time, path, tag, res string, 
 		return
 	}
 
-	lifetime := time.Now().Sub(t.Add(5*time.Minute)) / time.Second
+	lifetime := t.Add(1*time.Hour).Sub(time.Now()) / time.Second
 	if lifetime < 0 {
 		lifetime = 0
 	}
 
-	resp.WriteHeader(http.StatusOK)
 	resp.Header().Set("Content-Type", "application/json")
 	resp.Header().Set("Cache-Control", fmt.Sprintf("max-age:%d", lifetime))
 	raw, _ := json.Marshal(map[string]interface{}{
@@ -276,6 +275,7 @@ func writeResults(resp http.ResponseWriter, t time.Time, path, tag, res string, 
 		"tag":     strings.Trim(tag, `"`),
 		"results": results,
 	})
+	resp.WriteHeader(http.StatusOK)
 	resp.Write(raw)
 }
 
